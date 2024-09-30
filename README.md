@@ -9,3 +9,4 @@ Example code used includes:
 1. Example of Peak and Sigmoidal Metrics
 2. Example of Mapping Exercise
    
+[![DOI](https://zenodo.org/badge/865468555.svg)](https://doi.org/10.5281/zenodo.13863629)
