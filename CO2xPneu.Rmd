@@ -1,0 +1,300 @@
+---
+---
+title: "PneuxCO2.Flux"
+output: html_notebook
+---
+
+#Libraries Needed
+```{r}
+#Libraries
+library(dplyr) 
+library(tidyverse)
+library(plotrix)
+library(ggplot2)
+library(gtable)
+library(grid)
+library(Ryacas)
+library(psych)
+library(nlme)
+#library(piecewiseSEM)
+library(hypervolume)
+library(multcomp)
+library(AICcmodavg)
+library(drc)
+library(sjPlot)    # to visualizing mixed-effects models
+library(effects)   # to visualizing mixed-effects models
+library(lme4)      # "golden standard" for mixed-effects modelling in R (no p-values)
+library(lmerTest)  # p-values for MEMs based on the Satterthwaite approximation
+library(report)    # mainly for an "report" function
+library(emmeans)   # post-hoc analysis
+library(knitr)     # beautifying tables
+library(sjstats)   # ICC - intraclass-correlation coefficient
+library(caret)     # ML, model comparison & utility functions
+
+```
+
+
+```{r}
+#Multiplot
+multiplot <- function(..., plotlist = NULL, file, cols = 1, layout = NULL) {
+  require(grid)
+  plots <- c(list(...), plotlist)
+  numPlots = length(plots)
+  if (is.null(layout)) {
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))}
+  if (numPlots == 1) {
+    print(plots[[1]])} else {
+      grid.newpage()
+      pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+      for (i in 1:numPlots) {
+        matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+        print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                        layout.pos.col = matchidx$col))}}}
+```
+
+#Set working directory and import data
+```{r}
+#set working directory
+setwd("~/OneDrive - Old Dominion University/Ongoing Research/SG-Carbon.Ecotone/R.Data")
+
+#import flux data
+Pneu.CO2Flux <- read.csv("PneuxFlux.csv")
+```
+
+#Preparation of Data for Graphing
+```{r}
+
+#Change Year to character
+Pneu.CO2Flux$Year.Character <- as.character(Pneu.CO2Flux$Year)
+
+#SB-Mangrove Prep
+#Filter for just Mangrove at SB
+PneuxFlux.SB <- Pneu.CO2Flux %>%
+  filter(Transect %in% c("SB1","SB2", "SB3"))
+
+#PU-Mangrove Prep
+#Filter for just Mangrove at SB
+PneuxFlux.PU <- Pneu.CO2Flux %>%
+  filter(Transect %in% c("PU1","PU2", "PU3"))
+
+```
+#linear regression or a power function or exponential
+```{r}
+#Linear- 
+PxFluxSBLin <- lme(Flux~ Pneu, data= PneuxFlux.SB, method = "REML", random = ~1|Year.Character/Plot)
+summary(PxFluxSBLin)
+anova.lme(PxFluxSBLin)
+AICc(PxFluxSBLin)
+rsquared(PxFluxSBLin)
+#Power function
+PxFluxSBPow <-lme((Flux^2)~Pneu, data=PneuxFlux.SB, method= "REML", random = ~1|Year.Character/Plot)
+summary(PxFluxSBPow)
+anova.lme(PxFluxSBPow)
+AICc(PxFluxSBPow)
+rsquared(PxFluxSBPow)
+#Exponential * Chosen
+PxFluxSBLog <- lme(log(Flux) ~ Pneu, data = PneuxFlux.SB, method = "ML", random = ~1|Year.Character/Plot)
+summary(PxFluxSBLog)
+AICc(PxFluxSBLog)
+rsquared(PxFluxSBLog)
+coef(PxFluxSBLog)
+
+#non-mixed effect model * Chosen in V2
+PxFluxSBLog1 <- lm(log(Flux)~Pneu, data = PneuxFlux.SB)
+summary(PxFluxSBLog1)
+confint(PxFluxSBLog1, level = 0.95)
+
+coeffi
+#equation 
+#flux = -0.2620291+e^pneu
+#ln(y)= ln(a)+b*x
+#ln(a)= -0.2620291
+#b= 0.0039764
+#log(0.6121462)
+#a =-0.4907841
+
+
+dfPxFSB$Flux3 <- -0.4907841 * exp(0.0039764* Pneu)
+
+#Build DataFrame
+col3 <-0:370
+Pneu<-0:370
+dfPxFSB<-data.frame(col3,Pneu)
+#add to dataframe
+dfPxFSB$Flux<- predict(PxFluxSBLog1, dfPxFSB, level = 0) #predict values
+dfPxFSB$Flux2<-exp(dfPxFSB$Flux) #convert to give true flux values
+dfPxFSB$Flux3<-predicted_y
+dfPxFSB$CI <- predict(PxFluxSBLog1,dfPxFSB, interval = "confidence" )#predict CI
+dfPxFSB$CI2<-exp(dfPxFSB$CI) #convert to give true flux values
+dfPxFSB$CIL<-dfPxFSB$CI2[,"lwr"] #Rename for lower
+dfPxFSB$CIU<-dfPxFSB$CI2[,"upr"] #Rename for upper
+
+qplot(Pneu, Flux2, data = dfPxFSB)
+
+```
+Extract Co-Efficients for equation
+```{r}
+#General equation y =a*e^bx
+y<-PneuxFlux.SB$Flux
+log_y <- log(PneuxFlux.SB$Flux)
+x <- PneuxFlux.SB$Pneu
+model <- lm(log_y ~x )
+summary(model)
+```
+```{r}
+coefficients <- coef(model)
+ln_a <- coefficients[1]
+b <- coefficients[2]
+
+# Convert ln(a) back to a
+a <- exp(ln_a)
+
+# Print the coefficients
+cat("a:", a, "\n")
+cat("b:", b, "\n")
+```
+```{r}
+predicted_y <- a * exp(b * x)
+print(predicted_y)
+
+data <- data.frame(x = x, y = y, predicted_y = predicted_y)
+
+```
+```{r}
+ggplot(data, aes(x = x, y = y)) +
+  geom_point(color = "blue") +  # Original data
+  geom_line(aes(y = predicted_y), color = "red") +  # Fitted line
+  ggtitle("Exponential Regression") +
+  xlab("x") +
+  ylab("y")
+```
+
+
+Pneu x Flux Mangrove SB-Final Graph
+```{r}
+#Mangrove
+PneuxFlux.SBGraph <- ggplot(PneuxFlux.SB) + #define dataset
+  xlab("Pneumatophores (#/m2)") + #x-label
+  ylab("CO2 Flux [µmol m-2 s-1]")+ #y-label
+  theme_bw() + #makes clear background
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.position = "none") +#Removes gray gridlines and remvoes legend
+  geom_ribbon(data = dfPxFSB, aes(x = Pneu, ymin = CIL, ymax= CIU), color = "black", linetype= "dotted", fill = "gray", alpha = 0.5)+
+  
+  geom_jitter(data = PneuxFlux.SB, aes(x=Pneu, y=Flux, color = Year.Character), size = 2)+ 
+ scale_color_manual(values = c("2020" = "darkolivegreen3", "2021" = "darkgreen"))+#defines point colors
+  geom_smooth(data= dfPxFSB, aes(x=Pneu, y=Flux2), method = 'loess', color = "black", )+
+  scale_x_continuous(limits=c(-5,400), breaks=c(0, 100, 200, 300,400))+ # x-axis breaks and x limits
+  scale_y_continuous(limits=c(0,6), breaks=c(0, 2, 4, 6)) #Sets breaks on y axis and y limits
+print(PneuxFlux.SBGraph)
+```
+#linear regression or a power function or exponential
+```{r}
+#Linear- 
+PxFluxPULin <- lme(Flux~ Pneu, data= PneuxFlux.PU, method = "REML", random = ~1|Year.Character/Plot)
+summary(PxFluxPULin)
+anova.lme(PxFluxPULin)
+AICc(PxFluxPULin)
+rsquared(PxFluxPULin)
+#Power function
+PxFluxPUPow <-lme((Flux^2)~Pneu, data=PneuxFlux.PU, method= "REML", random = ~1|Year.Character/Plot)
+summary(PxFluxPUPow)
+anova.lme(PxFluxPUPow)
+AICc(PxFluxPUPow)
+rsquared(PxFluxSBPow)
+#Exponential * Chosen
+PxFluxPULog <- lme(log(Flux+1) ~Pneu, data = PneuxFlux.PU, method = "REML", random = ~1|Year.Character/Plot)
+summary(PxFluxPULog)
+AICc(PxFluxPULog)
+rsquared(PxFluxPULog)
+confint(PxFluxPULog)
+
+#exponential w/o mix effects model
+PxFluxPULog1 <- lm(log(Flux+1) ~Pneu, data = PneuxFlux.PU)
+summary(PxFluxPULog1)
+
+#Build DataFrame
+col3 <-0:320
+Pneu<-0:320
+dfPxFPU<-data.frame(col3,Pneu)
+#add to dataframe
+dfPxFPU$Flux<- predict(PxFluxPULog1, dfPxFPU, level = 0)
+dfPxFPU$Flux2<-exp(dfPxFPU$Flux)-1
+
+dfPxFPU$CI <- predict(PxFluxPULog1,dfPxFPU, interval = "confidence" )#predict CI
+dfPxFPU$CI2<-exp(dfPxFPU$CI)-1 #convert to give true flux values
+dfPxFPU$CIL<-dfPxFPU$CI2[,"lwr"] #Rename for lower
+dfPxFPU$CIU<-dfPxFPU$CI2[,"upr"] #Rename for upper
+
+qplot(Pneu, Flux2, data = dfPxFPU)
+
+
+```
+Check Coefficients for PU
+```{r}
+#General equation y =a*e^bx
+y<-PneuxFlux.PU$Flux
+log_y <- log(y+1)#added log plus 1 to make it so NaNs produced as ln(0)= -Inf
+x <- PneuxFlux.PU$Pneu
+model <- lm(log_y ~x )
+summary(model)
+```
+```{r}
+coefficients <- coef(model)
+ln_a <- coefficients[1]
+b <- coefficients[2]
+
+# Convert ln(a) back to a
+a <- exp(ln_a)
+
+# Print the coefficients
+cat("a:", a, "\n")
+cat("b:", b, "\n")
+```
+```{r}
+#Predict Value
+predicted_y <- (a * exp(b * x))-1
+print(predicted_y)
+data <- data.frame(x = x, y = y, predicted_y = predicted_y)
+
+```
+```{r}
+ggplot(data, aes(x = x, y = y)) +
+  geom_point(color = "blue") +  # Original data
+  geom_line(aes(y = predicted_y), color = "red") +  # Fitted line
+  ggtitle("Exponential Regression") +
+  xlab("x") +
+  ylab("y")
+```
+#mangrove PU
+```{r}
+PneuxFlux.PUGraph <- ggplot(PneuxFlux.PU) + #define dataset
+  xlab("Pneumatophores (#/m2)") + #x-label
+  ylab("CO2 Flux [µmol m-2 s-1]")+ #y-label
+  theme_bw() + #makes clear background
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.position = "none") +#Removes gray gridlines and remvoes legend
+  geom_ribbon(data = dfPxFPU, aes(x = Pneu, ymin = CIL, ymax= CIU), color = "black", linetype= "dotted", fill = "gray", alpha = 0.5)+
+  geom_jitter(data = PneuxFlux.PU, aes(x=Pneu, y=Flux, color = Year.Character), size = 2)+ #points
+  geom_smooth(data= dfPxFPU, aes(x=Pneu, y=Flux2), method = 'loess', color = "black")+
+  scale_color_manual(values = c("2020" = "darkolivegreen3", "2021" = "darkgreen"))+#defines point colors
+  scale_x_continuous(limits=c(-5,400), breaks=c(0, 100, 200, 300,400))+ # x-axis breaks and x limits
+scale_y_continuous(limits=c(0,6), breaks=c(0, 2, 4, 6)) #Sets breaks on y axis and y limits
+print(PneuxFlux.PUGraph)
+```
+```{r}
+multiplot(PneuxFlux.SBGraph, PneuxFlux.PUGraph, cols=2)
+
+```
+
+
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
